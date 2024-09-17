@@ -1,2 +1,2 @@
-python schemaGenerator.py
-python alembic init alembic
+python3 schemaGenerator.py
+python3 alembic init alembic
