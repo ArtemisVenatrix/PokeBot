@@ -13,6 +13,11 @@
 #  - DONE: Fix bug where reminders arent sent if there was a streak submission yesterday
 #  - DONE: make it so vc notifs don't message the user who just joined the vc
 #
+# TODO for v1.2 hotfix:
+#
+#  - DONE: fix designate_art_channel command
+#  - TODO: fix redundant streak reminders bug
+#
 #  TODO for future releases:
 #
 #  - TODO: make setup initialize a .env file
@@ -678,7 +683,7 @@ async def designate_art_channel(ctx: commands.Context):
     try:
         with Session() as session:
             # Retrieve db entry for the guild the command was issued on.
-            guildObj = session.query(Guild).filter(Guild.id == ctx.guild.id)
+            guildObj = session.query(Guild).filter(Guild.id == ctx.guild.id).first()
             # Set the guild entry's 'art_channel_id' field to the id of the channel the command was issued from.
             guildObj.art_channel_id = ctx.channel.id
             session.commit()
