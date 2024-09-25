@@ -2,13 +2,31 @@
 import datetime
 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, Date, Boolean
+from sqlalchemy import String, ForeignKey, Date, Boolean, Table, Column
 from typing import List
 from sqlalchemy.ext import hybrid
 
 
 class Base(DeclarativeBase):
     pass
+
+
+subscriber_association_table = Table(
+    "subscriber_association_table",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id"), primary_key=True),
+    Column("guild_id", ForeignKey("guilds.id"), primary_key=True),
+)
+
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    notif_subscriptions: Mapped[List["Guild"]] = relationship(
+        secondary=subscriber_association_table, back_populates="member_subs"
+    )
 
 
 class Subscriber(Base):
@@ -28,7 +46,9 @@ class Guild(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     art_channel_id: Mapped[int] = mapped_column(nullable=True)
-    member_subs: Mapped[List["Subscriber"]] = relationship()
+    member_subs: Mapped[List["User"]] = relationship(
+        secondary=subscriber_association_table, back_populates="notif_subscriptions"
+    )
     art_streaks: Mapped[List["ArtStreak"]] = relationship()
 
     def __repr__(self) -> str:
