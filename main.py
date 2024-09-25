@@ -444,7 +444,7 @@ async def submit_art(interaction: discord.Interaction, attachment: discord.Attac
                 if result is None:
                     guildObj: Guild = session.query(Guild).filter(Guild.id == interaction.guild_id).first()
                     # if guild has not designated an art channel then raise exception and inform user
-                    if Guild.art_channel_id is None:
+                    if guildObj.art_channel_id is None:
                         await interaction.response.send_message("This guild has not designated an art channel!")
                         raise Exception("Art channel not designated on this guild!")
                     # initialize new art streak and add to session
