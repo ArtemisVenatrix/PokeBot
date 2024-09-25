@@ -99,8 +99,7 @@ async def on_ready():
             # db. If any are not found in the db they are queued in the 'discordGuilds' array to be sent to the
             # registering function.
             for guild in bot.guilds:
-                stmt = select(Guild.id).filter(Guild.id.in_([guild.id]))
-                result = session.execute(stmt).fetchone()
+                result = session.query(Guild.id).filter(Guild.id.in_([guild.id])).first()
                 if result is None:
                     discordGuilds.append(guild)
         except Exception as e:
@@ -198,16 +197,16 @@ async def push_reminder():
     try:
         with Session() as session:
             # Pull a list of all active art streaks from local db
-            stmt = select(ArtStreak).filter(ArtStreak.active)
-            result = session.execute(stmt).all()
+            result = session.query(ArtStreak).filter(ArtStreak.active).all()
             # Iterate through list
             for streak in result:
                 # For some reason the iterator needs to be subscripted, or it won't work.
                 streakObj = streak[0]
                 # Pull a list of all art streak submissions registered under the current art streak.
-                stmt = select(ArtStreakSubmission).join(ArtStreak, ArtStreakSubmission.art_streak_id == streakObj.id) \
-                    .order_by(ArtStreakSubmission.creation_date.desc())
-                submissionResults = session.execute(stmt).all()
+                submissionResults = session.query(ArtStreakSubmission)\
+                    .join(ArtStreak, ArtStreakSubmission.art_streak_id == streakObj.id)\
+                    .order_by(ArtStreakSubmission.creation_date.desc())\
+                    .all()
                 streakFulfilled = False
                 # Iterate through said art streak list. If there has been a submission to this art streak today, then do
                 # nothing. Otherwise, send a reminder to the art streak's user.
@@ -220,8 +219,7 @@ async def push_reminder():
                     else:
                         break
                 if not streakFulfilled:
-                    stmt = select(Guild).filter(Guild.id == streakObj.guild_id)
-                    guildObj = session.execute(stmt).fetchone()[0]
+                    guildObj = session.query(Guild).filter(Guild.id == streakObj.guild_id).first()
                     artChannel = await bot.fetch_channel(guildObj.art_channel_id)
                     await artChannel.send(f"<@{streakObj.user_id}> still needs to submit art today and is a cringe, gay baby for not doing so already.")
     except Exception as e:
@@ -260,15 +258,17 @@ async def check_streaks():
             result = session.query(ArtStreak).filter(ArtStreak.active).all()
             # Iterates through said list.
             for streak in result:
+                streakObj = streak[0]
                 # Renews freezes on sunday
                 if datetime.datetime.today().weekday() == 6:
-                    streak[0].freezes = 2
+                   streakObj.freezes = 2
                 # Calculates yesterday's date.
                 yesterday = datetime.date.today() - datetime.timedelta(1)
                 # Pulls a list of all submissions for the current art steak.
-                stmt = select(ArtStreakSubmission).join(ArtStreak, ArtStreakSubmission.art_streak_id == streak[0].id)\
-                    .order_by(ArtStreakSubmission.creation_date.desc())
-                submissionResults = session.execute(stmt).all()
+                submissionResults = session.query(ArtStreakSubmission)\
+                    .join(ArtStreak, ArtStreakSubmission.art_streak_id == streakObj.id)\
+                    .order_by(ArtStreakSubmission.creation_date.desc())\
+                    .all()
                 streakFulfilled = False
                 # Iterates through all the submissions and determines if a submission has been given yesterday or
                 # today. If one hasn't, then remove a freeze from the streak. If the streak is out of freezes, then
@@ -280,14 +280,13 @@ async def check_streaks():
                     else:
                         break
                 if not streakFulfilled:
-                    if streak[0].freezes == 0:
-                        await terminate_streak(streak[0].id, 1)
+                    if streakObj.freezes == 0:
+                        await terminate_streak(streakObj.id, 1)
                     else:
-                        streak[0].freezes -= 1
-                        stmt = select(Guild).filter(Guild.id == streak[0].guild_id)
-                        guildObj = session.execute(stmt).fetchone()[0]
+                        streakObj.freezes -= 1
+                        guildObj = session.query(Guild).filter(Guild.id == streakObj.guild_id).first()
                         artChannel = await bot.fetch_channel(guildObj.art_channel_id)
-                        await artChannel.send(f"<@{streak[0].user_id}> failed to fulfill yesterday's streak requirement and has lost a freeze.")
+                        await artChannel.send(f"<@{streakObj.user_id}> failed to fulfill yesterday's streak requirement and has lost a freeze.")
             session.commit()
             print("Streaks checked successfully!")
     except Exception as e:
@@ -308,8 +307,7 @@ async def terminate_streak(streak_id: int, reason: int):
         print(f"Terminating streak: {streak_id}...")
         with Session() as session:
             # Pull the requested art streak.
-            stmt = select(ArtStreak).filter(ArtStreak.id == streak_id)
-            artStreak = session.execute(stmt).fetchone()[0]
+            artStreak = session.query(ArtStreak).filter(ArtStreak.id == streak_id).first()
             # Set it to inactive and set its end date.
             artStreak.active = False
             artStreak.end_date = datetime.date.today()
@@ -321,8 +319,7 @@ async def terminate_streak(streak_id: int, reason: int):
                 reasonStr = "The streak parameters were not fulfilled in time."
             print(f"Termination reason: {reasonStr}")
             # Pull the guild that the art streak belongs to.
-            stmt = select(Guild).filter(Guild.id == artStreak.guild_id)
-            guildObj = session.execute(stmt).fetchone()[0]
+            guildObj = session.query(Guild).filter(Guild.id == artStreak.guild_id).first()
             # Pull the designated art channel for said guild.
             artChannel = await bot.fetch_channel(guildObj.art_channel_id)
             # Send the announcement for the art streak's termination.
@@ -345,9 +342,10 @@ async def am_i_subscribed(interaction: discord.Interaction) -> None:
         try:
             # The following sql statement looks through the list of notif subscribers registered to the local guild and
             # returns the one that matches with the user requesting the query if such an entry exists.
-            stmt = select(Subscriber).join(Guild, Subscriber.parent_guild_id == Guild.id)\
-                .filter(and_(Guild.id == interaction.guild.id, Subscriber.user_id == interaction.user.id))
-            result = session.execute(stmt).fetchone()
+            result = session.query(Subscriber)\
+                .join(Guild, Subscriber.parent_guild_id == Guild.id)\
+                .filter(and_(Guild.id == interaction.guild.id, Subscriber.user_id == interaction.user.id))\
+                .first()
             if result is None:
                 await interaction.response.send_message("You are not subscribed")
             else:
@@ -369,9 +367,10 @@ async def subscribe(interaction: discord.Interaction) -> None:
         try:
             # The following sql statement looks through the list of notif subscribers registered to the local guild and
             # returns the one that matches with the user requesting the query if such an entry exists.
-            stmt = select(Subscriber).join(Guild, Subscriber.parent_guild_id == Guild.id)\
-                .filter(and_(Guild.id == interaction.guild.id, Subscriber.user_id == interaction.user.id))
-            result = session.execute(stmt).fetchone()
+            result = session.query(Subscriber)\
+                .join(Guild, Subscriber.parent_guild_id == Guild.id)\
+                .filter(and_(Guild.id == interaction.guild.id, Subscriber.user_id == interaction.user.id))\
+                .first()
             # If the query failed to return a result then the user hasn't already been subscribed and should be
             # immediately
             if result is None:
@@ -400,9 +399,10 @@ async def unsubscribe(interaction: discord.Interaction) -> None:
         try:
             # The following sql statement looks through the list of notif subscribers registered to the local guild and
             # returns the one that matches with the user requesting the query if such an entry exists.
-            stmt = select(Subscriber).join(Guild, Subscriber.parent_guild_id == Guild.id)\
-                .filter(and_(Guild.id == interaction.guild.id, Subscriber.user_id == interaction.user.id))
-            result = session.execute(stmt).fetchone()
+            result = session.query(Subscriber)\
+                .join(Guild, Subscriber.parent_guild_id == Guild.id)\
+                .filter(and_(Guild.id == interaction.guild.id, Subscriber.user_id == interaction.user.id))\
+                .first()
             # if the query succeeded in returning a result then the user is still subscribed and should be removed from
             # this guild's subscriber list immediately.
             if result is not None:
@@ -437,9 +437,10 @@ async def submit_art(interaction: discord.Interaction, attachment: discord.Attac
         try:
             with Session() as session:
                 # query all active art streaks linked to the local guild
-                stmt = select(ArtStreak).join(Guild, ArtStreak.guild_id == Guild.id)\
-                    .filter(and_(and_(Guild.id == interaction.guild_id, ArtStreak.user_id == interaction.user.id), ArtStreak.active))
-                result = session.execute(stmt).fetchone()
+                result = session.query(ArtStreak)\
+                    .join(Guild, ArtStreak.guild_id == Guild.id)\
+                    .filter(and_(and_(Guild.id == interaction.guild_id, ArtStreak.user_id == interaction.user.id), ArtStreak.active))\
+                    .first()
                 # if none exist then create a new one
                 if result is None:
                     guildObj: Guild = session.query(Guild).filter(Guild.id == interaction.guild_id).first()
@@ -496,10 +497,10 @@ async def streak_stats(interaction: discord.Interaction, user: discord.User):
     try:
         with Session() as session:
             # Get list of all the specified user's streaks on the local guild.
-            streaksList = session.query(ArtStreak) \
-                .join(Guild, ArtStreak.guild_id == interaction.guild_id) \
-                .filter(and_(Guild.id == interaction.guild_id, ArtStreak.user_id == user.id)) \
-                .order_by(ArtStreak.get_duration.desc()) \
+            streaksList = session.query(ArtStreak)\
+                .join(Guild, ArtStreak.guild_id == interaction.guild_id)\
+                .filter(and_(Guild.id == interaction.guild_id, ArtStreak.user_id == user.id))\
+                .order_by(ArtStreak.get_duration.desc())\
                 .all()
             # Check if the user has any streaks on the local guild. If yes: then proceed, otherwise: inform command
             # submitter that the requested user has no streaks locally.
@@ -618,8 +619,7 @@ async def on_voice_state_update(member, before, after):
             with Session() as session:
                 try:
                     # This statement retrieves all user ids of subscribers affiliated with the local guild
-                    stmt = select(Subscriber.user_id).join(Guild).filter(Guild.id == guild.id)
-                    result = session.execute(stmt).all()
+                    result = session.query(Subscriber.user_id).join(Guild).filter(Guild.id == guild.id).all()
                     # Iterate through the list of subscriber user ids and dm them each a notification about activity in
                     # the guild
                     for id in result:
