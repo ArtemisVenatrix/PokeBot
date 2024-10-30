@@ -16,19 +16,23 @@
 # TODO for v1.2 hotfix:
 #
 #  - DONE: fix designate_art_channel command
-#  - TODO: migrate scheduled functions to discord's internal scheduler
-#  - TODO: fix redundant streak reminders bug
+#  - DONE: migrate scheduled functions to discord's internal scheduler
+#  - DONE: fix redundant streak reminders bug
+#
+# TODO for v2 release:
+#
+#  - TODO: setup proper error logging
+#  - TODO: organize features into discord.py's 'cog' extension
+#  - TODO: rebuild models around a dedicated user table
 #
 #  TODO for future releases:
 #
 #  - TODO: make setup initialize a .env file
 #  - TODO: fix setup.sh
 #  - TODO: add a config file that determines whether setup has been done before
-#  - TODO: rebuild models around a dedicated user table
 #  - TODO: add per user config options that allow setting timezone for things like reminders
 #  - TODO: modify the 'push_reminder' function so that the message provided is different at random
-#  - TODO: rewrite all of the sql statements to use the newer 'query' syntax
-#  - TODO: setup proper error logging
+#  - DONE: rewrite all of the sql statements to use the newer 'query' syntax
 #
 # ////////////////////////////////////////////
 
