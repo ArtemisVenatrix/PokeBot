@@ -48,7 +48,7 @@ from dotenv import load_dotenv
 from discord.ext import commands, tasks
 import discord
 from discord import app_commands
-from sqlalchemy import select, delete, create_engine, and_, func
+from sqlalchemy import delete, create_engine, and_, func
 from models import Subscriber, Guild, ArtStreak, ArtStreakSubmission, PersistentVars
 from sqlalchemy.orm import sessionmaker
 import asyncio
@@ -81,9 +81,6 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # load environmental variables and retrieve the bot token from them
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-
-# initialize the scheduler object
-scheduler = AsyncIOScheduler()
 
 
 """
