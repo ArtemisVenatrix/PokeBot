@@ -16,6 +16,7 @@
 # TODO for v1.2 hotfix:
 #
 #  - DONE: fix designate_art_channel command
+#  - TODO: migrate scheduled functions to discord's internal scheduler
 #  - TODO: fix redundant streak reminders bug
 #
 #  TODO for future releases:
@@ -40,7 +41,7 @@ import typing
 import json
 
 from dotenv import load_dotenv
-from discord.ext import commands
+from discord.ext import commands, tasks
 import discord
 from discord import app_commands
 from sqlalchemy import select, delete, create_engine, and_, func
@@ -49,6 +50,19 @@ from sqlalchemy.orm import sessionmaker
 import asyncio
 import aiohttp
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+
+# Declare time values for task scheduling.
+# Definition of mountain time
+mtn = datetime.timezone(datetime.timedelta(hours=-6), name="Mountain Time")
+# Time definitions
+streak_check_time = datetime.time(hour=0, tzinfo=mtn)
+streak_reminder_times = [
+    datetime.time(hour=9, tzinfo=mtn),
+    datetime.time(hour=12, tzinfo=mtn),
+    datetime.time(hour=15, tzinfo=mtn),
+    datetime.time(hour=18, tzinfo=mtn)
+]
 
 # Create database engine from the engine factory and instantiate the session factory based on the persistent engine
 engine = create_engine("sqlite:///poke_bot.db", echo=True)
@@ -78,10 +92,9 @@ scheduler = AsyncIOScheduler()
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}!")
+    check_streaks.start()
+    push_reminder.start()
     await check_streaks()
-    scheduler.add_job(check_streaks, 'cron', hour='0')
-    scheduler.add_job(push_reminder, 'cron', hour='9,12,15,18,21')
-    scheduler.start()
     discordGuilds = []
     # open a session with the database
     with Session() as session:
@@ -184,7 +197,6 @@ async def main():
         await bot.start(TOKEN)
 
 
-
 """
 # Scheduler call back function that handles the firing off of reminders for art streaks to all users with currently
 # active art streaks in respective guilds.
@@ -193,6 +205,7 @@ async def main():
 # @Params:
 # NONE
 """
+@tasks.loop(time=streak_reminder_times)
 async def push_reminder():
     try:
         with Session() as session:
@@ -200,28 +213,24 @@ async def push_reminder():
             result = session.query(ArtStreak).filter(ArtStreak.active).all()
             # Iterate through list
             for streak in result:
-                # For some reason the iterator needs to be subscripted, or it won't work.
-                streakObj = streak[0]
                 # Pull a list of all art streak submissions registered under the current art streak.
                 submissionResults = session.query(ArtStreakSubmission)\
-                    .join(ArtStreak, ArtStreakSubmission.art_streak_id == streakObj.id)\
+                    .join(ArtStreak, ArtStreakSubmission.art_streak_id == streak.id)\
                     .order_by(ArtStreakSubmission.creation_date.desc())\
                     .all()
                 streakFulfilled = False
                 # Iterate through said art streak list. If there has been a submission to this art streak today, then do
                 # nothing. Otherwise, send a reminder to the art streak's user.
                 for submissionResult in submissionResults:
-                    # For some reason the iterator needs to be subscripted, or it won't work.
-                    submissionResultObj = submissionResult[0]
-                    if submissionResultObj.creation_date == datetime.date.today():
+                    if submissionResult.creation_date == datetime.date.today():
                         streakFulfilled = True
                         break
                     else:
                         break
                 if not streakFulfilled:
-                    guildObj = session.query(Guild).filter(Guild.id == streakObj.guild_id).first()
+                    guildObj = session.query(Guild).filter(Guild.id == streak.guild_id).first()
                     artChannel = await bot.fetch_channel(guildObj.art_channel_id)
-                    await artChannel.send(f"<@{streakObj.user_id}> still needs to submit art today and is a cringe, gay baby for not doing so already.")
+                    await artChannel.send(f"<@{streak.user_id}> still needs to submit art today and is a cringe, gay baby for not doing so already.")
     except Exception as e:
         print(e)
 
@@ -233,7 +242,8 @@ async def push_reminder():
 # @Params:
 # NONE
 """
-async def check_streaks():
+@tasks.loop(time=streak_check_time)
+async def check_streaks(force=False):
     try:
         print("Checking streaks...")
         with Session() as session:
@@ -248,7 +258,7 @@ async def check_streaks():
             else:
                 print(f"Streaks were last checked on: {persistentVars.last_streak_check_date}")
             # If persistent vars says that the bot has not checked streaks yet today, then do so.
-            if persistentVars.last_streak_check_date == datetime.date.today():
+            if persistentVars.last_streak_check_date == datetime.date.today() and not force:
                 print("Streaks have already been checked today. Skipping rest of function...")
                 return
             # Update the entry detailing the last time streaks have been checked.
@@ -258,15 +268,14 @@ async def check_streaks():
             result = session.query(ArtStreak).filter(ArtStreak.active).all()
             # Iterates through said list.
             for streak in result:
-                streakObj = streak[0]
                 # Renews freezes on sunday
                 if datetime.datetime.today().weekday() == 6:
-                   streakObj.freezes = 2
+                   streak.freezes = 2
                 # Calculates yesterday's date.
                 yesterday = datetime.date.today() - datetime.timedelta(1)
                 # Pulls a list of all submissions for the current art steak.
                 submissionResults = session.query(ArtStreakSubmission)\
-                    .join(ArtStreak, ArtStreakSubmission.art_streak_id == streakObj.id)\
+                    .join(ArtStreak, ArtStreakSubmission.art_streak_id == streak.id)\
                     .order_by(ArtStreakSubmission.creation_date.desc())\
                     .all()
                 streakFulfilled = False
@@ -274,19 +283,19 @@ async def check_streaks():
                 # today. If one hasn't, then remove a freeze from the streak. If the streak is out of freezes, then
                 # terminate the streak.
                 for submissionResult in submissionResults:
-                    if submissionResult[0].creation_date == yesterday or submissionResult[0].creation_date == datetime.date.today():
+                    if submissionResult.creation_date == yesterday or submissionResult.creation_date == datetime.date.today():
                         streakFulfilled = True
                         break
                     else:
                         break
                 if not streakFulfilled:
-                    if streakObj.freezes == 0:
-                        await terminate_streak(streakObj.id, 1)
+                    if streak.freezes == 0:
+                        await terminate_streak(streak.id, 1)
                     else:
-                        streakObj.freezes -= 1
-                        guildObj = session.query(Guild).filter(Guild.id == streakObj.guild_id).first()
+                        streak.freezes -= 1
+                        guildObj = session.query(Guild).filter(Guild.id == streak.guild_id).first()
                         artChannel = await bot.fetch_channel(guildObj.art_channel_id)
-                        await artChannel.send(f"<@{streakObj.user_id}> failed to fulfill yesterday's streak requirement and has lost a freeze.")
+                        await artChannel.send(f"<@{streak.user_id}> failed to fulfill yesterday's streak requirement and has lost a freeze.")
             session.commit()
             print("Streaks checked successfully!")
     except Exception as e:
@@ -666,7 +675,11 @@ async def sync(ctx: commands.Context):
 @bot.command(description="Trigger a test function for debugging")
 @commands.is_owner()
 async def run_test(ctx: commands.Context, *args):
-    await check_streaks()
+    if(args[0] == "check_streaks"):
+        if(args[1:].__contains__("--force") or args[1:].__contains__("-f")):
+            await check_streaks(force=True)
+        else:
+            await check_streaks()
 
 
 """
