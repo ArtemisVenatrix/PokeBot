@@ -471,8 +471,6 @@ async def submit_art(interaction: discord.Interaction, attachment: discord.Attac
                                           , creation_date=datetime.date.today())
                     guildObj.art_streaks.append(result)
                     session.add(result)
-                else:
-                    result = result[0]
                 # initialize submission and add it to the art streak
                 submissionObj = ArtStreakSubmission(art_streak_id=result.id, creation_date=datetime.date.today(), user_id=interaction.user.id)
                 result.submissions.append(submissionObj)
