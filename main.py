@@ -19,6 +19,11 @@
 #  - DONE: migrate scheduled functions to discord's internal scheduler
 #  - DONE: fix redundant streak reminders bug
 #
+# TODO for v1.3 hotfix:
+#
+#  - DONE: fix subscription commands with new db structure
+#  - TODO: try to recover old db file
+#
 # TODO for v2 release:
 #
 #  - TODO: setup proper error logging
@@ -51,7 +56,6 @@ from sqlalchemy import create_engine
 from artStreakTracker import ArtStreakTracker
 from models import Guild
 from sqlalchemy.orm import sessionmaker
-import asyncio
 from vcNotifier import VcNotifier
 
 
@@ -251,6 +255,15 @@ class MyBot(commands.Bot):
             print(e)
 
 
+"""
+# Entry point function for the entire application.
+# @Params:
+# NONE
+"""
+def main():
+    bot.run(TOKEN, log_handler=None)
+
+
 # set discords special permission requests, in this case viewing message content, and initialize the bot object
 intents = discord.Intents.default()
 intents.message_content = True
@@ -272,17 +285,4 @@ logger.addHandler(logHandler)
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
-
-"""
-# Entry point function for the entire application.
-# @Params:
-# NONE
-"""
-async def main():
-    # Initialize async functions and launch the bot's built in event loop.
-    with bot:
-        bot.run(TOKEN, log_handler=None)
-
-
-# Starting call to entrypoint function
-asyncio.run(main())
+main()

@@ -1,9 +1,9 @@
 from discord.ext import commands
 import discord
-from models import Subscriber, Guild
+from models import User, Guild
 from sqlalchemy import and_, delete
 
-class VcNotifier(commands.cog):
+class VcNotifier(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
@@ -19,16 +19,13 @@ class VcNotifier(commands.cog):
         # Open session with local db
         with self.bot.Session() as session:
             try:
-                # The following sql statement looks through the list of notif subscribers registered to the local guild and
-                # returns the one that matches with the user requesting the query if such an entry exists.
-                result = session.query(Subscriber) \
-                    .join(Guild, Subscriber.parent_guild_id == Guild.id) \
-                    .filter(and_(Guild.id == interaction.guild.id, Subscriber.user_id == interaction.user.id)) \
-                    .first()
-                if result is None:
-                    await interaction.response.send_message("You are not subscribed")
-                else:
+                self.check_user_entry(interaction.user.id)
+                guild = session.get(Guild, interaction.guild.id)
+                usr = session.get(User, interaction.user.id)
+                if usr.notif_subscriptions.__contains__(guild):
                     await interaction.response.send_message("You are subscribed")
+                else:
+                    await interaction.response.send_message("You are not subscribed")
             except Exception as e:
                 print(e)
                 await interaction.response.send_message("An error has occurred. Go bug Artemis.")
@@ -44,28 +41,19 @@ class VcNotifier(commands.cog):
         # Open session with the local db.
         with self.bot.Session() as session:
             try:
-                # The following sql statement looks through the list of notif subscribers registered to the local guild and
-                # returns the one that matches with the user requesting the query if such an entry exists.
-                result = session.query(Subscriber) \
-                    .join(Guild, Subscriber.parent_guild_id == Guild.id) \
-                    .filter(and_(Guild.id == interaction.guild.id, Subscriber.user_id == interaction.user.id)) \
-                    .first()
-                # If the query failed to return a result then the user hasn't already been subscribed and should be
-                # immediately
-                if result is None:
-                    subscriber = Subscriber(user_id=interaction.user.id)
-                    guild = session.get(Guild, interaction.guild.id)
-                    guild.member_subs.append(subscriber)
-                    session.add(subscriber)
+                self.check_user_entry(interaction.user.id)
+                usr = session.get(User, interaction.user.id)
+                guild = session.get(Guild, interaction.guild.id)
+                subscribed = usr.notif_subscriptions.__contains__(guild)
+                if not subscribed:
+                    guild.member_subs.append(usr)
                     session.commit()
                     await interaction.response.send_message("You have been subscribed.")
-                # Otherwise notify the user they have already been subscribed in this guild
                 else:
                     await interaction.response.send_message("You are already subscribed.")
             except Exception as e:
                 print(e)
                 await interaction.response.send_message("An error has occurred. Go bug Artemis.")
-
 
     """
     # Command that allows users to un-enroll from the local guild's vc notifs.
@@ -76,25 +64,31 @@ class VcNotifier(commands.cog):
     async def unsubscribe(self, interaction: discord.Interaction) -> None:
         with self.bot.Session() as session:
             try:
-                # The following sql statement looks through the list of notif subscribers registered to the local guild and
-                # returns the one that matches with the user requesting the query if such an entry exists.
-                result = session.query(Subscriber) \
-                    .join(Guild, Subscriber.parent_guild_id == Guild.id) \
-                    .filter(and_(Guild.id == interaction.guild.id, Subscriber.user_id == interaction.user.id)) \
-                    .first()
-                # if the query succeeded in returning a result then the user is still subscribed and should be removed from
-                # this guild's subscriber list immediately.
-                if result is not None:
-                    stmt = delete(Subscriber).where(Subscriber.id == result[0].id)
-                    session.execute(stmt)
+                self.check_user_entry(interaction.user.id)
+                usr = session.get(User, interaction.user.id)
+                guild = session.get(Guild, interaction.guild.id)
+                if usr.notif_subscriptions.__contains__(guild):
+                    guild.member_subs.remove(usr)
                     session.commit()
                     await interaction.response.send_message("You have been unsubscribed.")
-                # Otherwise, inform the user that they are not currently subscribed.
                 else:
                     await interaction.response.send_message("You aren't subscribed to begin with.")
             except Exception as e:
                 print(e)
                 await interaction.response.send_message("An error has occurred. Go bug Artemis.")
+
+
+    def check_user_entry(self, id) -> bool:
+        with self.bot.Session() as session:
+            result = session.query(User) \
+                .filter(User.id == id) \
+                .first()
+            if result is not None:
+                return True
+            usr = User(id=id)
+            session.add(usr)
+            session.commit()
+            return False
 
 
     """
@@ -127,13 +121,13 @@ class VcNotifier(commands.cog):
                 with self.bot.Session() as session:
                     try:
                         # This statement retrieves all user ids of subscribers affiliated with the local guild
-                        result = session.query(Subscriber.user_id).join(Guild).filter(Guild.id == guild.id).all()
+                        result = session.query(User.id).join(Guild).filter(Guild.id == guild.id).all()
                         # Iterate through the list of subscriber user ids and dm them each a notification about activity in
                         # the guild
                         for id in result:
-                            user = discord.utils.get(guild.members, id=id[0])
+                            user = discord.utils.get(guild.members, id=id)
                             # Avoid messaging the user who just joined the vc.
-                            if id[0] != member.id:
+                            if id != member.id:
                                 # If the bot does not have an active dm with a user, create one before notifying them.
                                 if user.dm_channel is None:
                                     await self.bot.create_dm(user)
