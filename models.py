@@ -28,16 +28,8 @@ class User(Base):
         secondary=subscriber_association_table, back_populates="member_subs"
     )
 
-
-class Subscriber(Base):
-    __tablename__ = "subscribers"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column()
-    parent_guild_id: Mapped[int] = mapped_column(ForeignKey("guilds.id"))
-
     def __repr__(self) -> str:
-        return f"Subscriber(id={self.id!r}, username={self.user_id!r}, parent_guild_id={self.parent_guild_id!r})"
+        return f"User(id={self.id}, notif_subscriptions={self.notif_subscriptions})"
 
 
 class Guild(Base):
