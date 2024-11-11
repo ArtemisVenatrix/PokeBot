@@ -21,7 +21,7 @@
 #
 # TODO for v1.3 hotfix:
 #
-#  - TODO: fix subscription commands with new db structure
+#  - DONE: fix subscription commands with new db structure
 #  - TODO: try to recover old db file
 #
 # TODO for v2.0 release:
