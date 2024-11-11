@@ -46,6 +46,7 @@ import os
 import typing
 import json
 import logging
+import logging.handlers
 
 from dotenv import load_dotenv
 from discord.ext import commands
@@ -273,13 +274,17 @@ logger = logging.getLogger('discord')
 logger.setLevel(logging.DEBUG)
 logging.getLogger('discord.http').setLevel(logging.INFO)
 
-logHandler = logging.FileHandler(
-    filename='poke_bot.log',
+handler = logging.handlers.RotatingFileHandler(
+    'poke_bot.log',
     encoding='utf-8',
+    maxBytes=32 * 1024, #32 KiB
+    backupCount=5, # rotate through five log files
     mode='w'
 )
-
-logger.addHandler(logHandler)
+dt_fmt = '%Y-%m-%d %H:%M:%S'
+formatter = logging.Formatter('[{asctime}] [{levelname:<8}] {name}: {message}', dt_fmt, style="{")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 # load environmental variables and retrieve the bot token from them
 load_dotenv()
