@@ -634,7 +634,10 @@ async def on_voice_state_update(member, before, after):
             with Session() as session:
                 try:
                     # This statement retrieves all user ids of subscribers affiliated with the local guild
-                    result = session.query(User.id).join(Guild).filter(Guild.id == guild.id).all()
+                    result = session.query(User.id)\
+                        .join(Guild)\
+                        .filter(Guild.id == guild.id)\
+                        .all()
                     # Iterate through the list of subscriber user ids and dm them each a notification about activity in
                     # the guild
                     for id in result:
