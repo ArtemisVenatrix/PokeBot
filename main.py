@@ -638,10 +638,10 @@ async def on_voice_state_update(member, before, after):
                     memberSubs = guildObj.member_subs
                     # Iterate through the list of subscriber user ids and dm them each a notification about activity in
                     # the guild
-                    for id in memberSubs:
-                        user = discord.utils.get(guild.members, id=id)
+                    for sub in memberSubs:
+                        user = discord.utils.get(guild.members, id=sub.id)
                         # Avoid messaging the user who just joined the vc.
-                        if id != member.id:
+                        if sub.id != member.id:
                             # If the bot does not have an active dm with a user, create one before notifying them.
                             if user.dm_channel is None:
                                 await bot.create_dm(user)
