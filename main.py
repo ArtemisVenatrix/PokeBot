@@ -634,13 +634,11 @@ async def on_voice_state_update(member, before, after):
             with Session() as session:
                 try:
                     # This statement retrieves all user ids of subscribers affiliated with the local guild
-                    result = session.query(User.id)\
-                        .join(Guild)\
-                        .filter(Guild.id == guild.id)\
-                        .all()
+                    guildObj = session.get(Guild, Guild.id == guild.id)
+                    memberSubs = guildObj.member_subs
                     # Iterate through the list of subscriber user ids and dm them each a notification about activity in
                     # the guild
-                    for id in result:
+                    for id in memberSubs:
                         user = discord.utils.get(guild.members, id=id)
                         # Avoid messaging the user who just joined the vc.
                         if id != member.id:
