@@ -54,10 +54,8 @@ import discord
 from discord import app_commands
 from sqlalchemy import create_engine
 
-from artStreakTracker import ArtStreakTracker
 from models import Guild
 from sqlalchemy.orm import sessionmaker
-from vcNotifier import VcNotifier
 
 
 class MyBot(commands.Bot):
@@ -80,10 +78,6 @@ class MyBot(commands.Bot):
     """
     async def on_ready(self):
         print(f"Logged in as {bot.user}!")
-        await self.add_cog(VcNotifier(self))
-        print("Mounted VcNotifier Cog!")
-        await self.add_cog(ArtStreakTracker(self))
-        print("Mounted ArtStreakTracker Cog!")
         discordGuilds = []
         # open a session with the database
         with self.Session() as session:
@@ -112,6 +106,17 @@ class MyBot(commands.Bot):
         # If the queue of new guilds to be registered has anything in it, send it off to the 'register_guild' function.
         if len(discordGuilds) > 0:
             self.register_guild(discordGuilds)
+
+
+    async def setup_hook(self) -> None:
+        await self.tree.sync()
+        for filename in os.listdir('cogs'):
+            if filename.endswith('.py'):
+                await self.load_extension(f'cogs.{filename[:-3]}')
+                print(f"Loaded Cog: {filename[:-3]}")
+            else:
+                print("Unable to load pycache folder.")
+        await self.tree.sync()
 
 
     """
@@ -173,6 +178,11 @@ class MyBot(commands.Bot):
                 print(e)
 
 
+    async def on_message(self, msg : discord.Message):
+        if msg.clean_content == "!sync" and await self.is_owner(msg.author):
+            await self.do_sync()
+
+
     """
     # Command that responds with a description of what features are available on the bot and how to use them.
     # The bot just returns the tutorial in string form in its response.
@@ -206,12 +216,10 @@ class MyBot(commands.Bot):
     # @Params:
     # ctx; Expected Type: commands.Context - standard non-tree bot command context object (See discord docs for more info).
     """
-    @commands.command(description="Syncs commands for the bot globally. Only usable by Artemis.")
-    @commands.is_owner()
-    async def sync(self, ctx: commands.Context):
+    async def do_sync(self):
         try:
             print("Syncing...")
-            synced = await bot.tree.sync()
+            synced = await self.tree.sync()
             print(synced)
             print("Syncing complete!")
         except Exception as e:
@@ -273,6 +281,7 @@ bot = MyBot(command_prefix='!', intents=intents)
 logger = logging.getLogger('discord')
 logger.setLevel(logging.DEBUG)
 logging.getLogger('discord.http').setLevel(logging.INFO)
+logging.getLogger("discord.exception").setLevel(logging.ERROR)
 
 handler = logging.handlers.RotatingFileHandler(
     'poke_bot.log',

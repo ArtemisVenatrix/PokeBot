@@ -1,12 +1,13 @@
 from discord.ext import commands
 import discord
 from models import User, Guild
-from sqlalchemy import and_, delete
+import logging
 
 class VcNotifier(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+        self.exceptionLogger = logging.getLogger("discord.exception")
 
 
     """
@@ -41,6 +42,8 @@ class VcNotifier(commands.Cog):
         # Open session with the local db.
         with self.bot.Session() as session:
             try:
+                arr = []
+                print(arr[5])
                 self.check_user_entry(interaction.user.id)
                 usr = session.get(User, interaction.user.id)
                 guild = session.get(Guild, interaction.guild.id)
@@ -53,6 +56,7 @@ class VcNotifier(commands.Cog):
                     await interaction.response.send_message("You are already subscribed.")
             except Exception as e:
                 print(e)
+                self.exceptionLogger.exception(e)
                 await interaction.response.send_message("An error has occurred. Go bug Artemis.")
 
     """
@@ -134,3 +138,6 @@ class VcNotifier(commands.Cog):
                                 await user.dm_channel.send(f"The VC in {guild.name} is now active!")
                     except Exception as e:
                         print(e)
+
+async def setup(bot):
+    await bot.add_cog(VcNotifier(bot))

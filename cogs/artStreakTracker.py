@@ -349,3 +349,7 @@ class ArtStreakTracker(commands.Cog):
             await ctx.channel.send("This channel has been designated as the art channel.")
         except Exception as e:
             print(e)
+
+
+async def setup(bot):
+    await bot.add_cog(ArtStreakTracker(bot))
