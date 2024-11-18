@@ -3,9 +3,11 @@ import aiohttp
 import io
 
 from discord.ext import commands, tasks
+from discord import app_commands
 import discord
 
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, create_engine
+from sqlalchemy.orm import sessionmaker
 from models import ArtStreak, ArtStreakSubmission, Guild, PersistentVars
 
 
@@ -24,6 +26,8 @@ class ArtStreakTracker(commands.Cog):
 
 
     def __init__(self, bot):
+        engine = create_engine("sqlite:///poke_bot.db", echo=True)
+        self.Session = sessionmaker(bind=engine)
         self.bot = bot
 
 
@@ -45,7 +49,7 @@ class ArtStreakTracker(commands.Cog):
     @tasks.loop(time=streak_reminder_times)
     async def push_reminder(self):
         try:
-            with self.bot.Session() as session:
+            with self.Session() as session:
                 # Pull a list of all active art streaks from local db
                 result = session.query(ArtStreak).filter(ArtStreak.active).all()
                 # Iterate through list
@@ -83,7 +87,7 @@ class ArtStreakTracker(commands.Cog):
     async def check_streaks(self, force=False):
         try:
             print("Checking streaks...")
-            with self.bot.Session() as session:
+            with self.Session() as session:
                 # Pull the persistent vars entry in the db.
                 persistentVars = session.query(PersistentVars).first()
                 # If persistent vars has no entry then make one.
@@ -142,7 +146,7 @@ class ArtStreakTracker(commands.Cog):
 
     async def terminate_user_streak(self, guild, user):
         try:
-            with (self.bot.Session() as session):
+            with (self.Session() as session):
                 result = session.query(ArtStreak.id)\
                     .join(Guild, ArtStreak.guild_id == guild.id)\
                     .filter(and_(ArtStreak.active, ArtStreak.user_id == user.id))\
@@ -164,7 +168,7 @@ class ArtStreakTracker(commands.Cog):
     async def terminate_streak(self, streak_id: int, reason: int):
         try:
             print(f"Terminating streak: {streak_id}...")
-            with self.bot.Session() as session:
+            with self.Session() as session:
                 # Pull the requested art streak.
                 artStreak = session.query(ArtStreak).filter(ArtStreak.id == streak_id).first()
                 # Set it to inactive and set its end date.
@@ -202,12 +206,12 @@ class ArtStreakTracker(commands.Cog):
     # attachment; Expected Type: discord.Attachment - tells discord to require someone provide an attachment with the
     #                                                                                      command and passes it to the code                                
     """
-    @commands.command(name="submitart", description="Submit art for an art streak. Only accepts image and audio files.")
+    @app_commands.command(name="submitart", description="Submit art for an art streak. Only accepts image and audio files.")
     async def submit_art(self, interaction: discord.Interaction, attachment: discord.Attachment):
         # check if the attachment is a valid file type (currently only allows audio or image)
         if attachment.content_type.__contains__("image") or attachment.content_type.__contains__("audio"):
             try:
-                with self.bot.Session() as session:
+                with self.Session() as session:
                     # query all active art streaks linked to the local guild
                     result = session.query(ArtStreak) \
                         .join(Guild, ArtStreak.guild_id == Guild.id) \
@@ -267,10 +271,10 @@ class ArtStreakTracker(commands.Cog):
     # interaction; Expected Type: discord.Interaction - required context object for all bot.tree commands
     # user; Expected Type: discord.User - tells discord to require the input of a user to retrieve stats on
     """
-    @commands.command(name="streakstats", description="View the stats of your current art streak.")
+    @app_commands.command(name="streakstats", description="View the stats of your current art streak.")
     async def streak_stats(self, interaction: discord.Interaction, user: discord.User):
         try:
-            with self.bot.Session() as session:
+            with self.Session() as session:
                 # Get list of all the specified user's streaks on the local guild.
                 streaksList = session.query(ArtStreak) \
                     .join(Guild, ArtStreak.guild_id == interaction.guild_id) \
@@ -339,7 +343,7 @@ class ArtStreakTracker(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def designate_art_channel(self, ctx: commands.Context):
         try:
-            with self.bot.Session() as session:
+            with self.Session() as session:
                 # Retrieve db entry for the guild the command was issued on.
                 guildObj = session.query(Guild).filter(Guild.id == ctx.guild.id).first()
                 # Set the guild entry's 'art_channel_id' field to the id of the channel the command was issued from.

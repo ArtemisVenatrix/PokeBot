@@ -1,11 +1,16 @@
 from discord.ext import commands
+from discord import app_commands
 import discord
 from models import User, Guild
 import logging
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 
 class VcNotifier(commands.Cog):
 
     def __init__(self, bot):
+        engine = create_engine("sqlite:///poke_bot.db", echo=True)
+        self.Session = sessionmaker(bind=engine)
         self.bot = bot
         self.exceptionLogger = logging.getLogger("discord.exception")
 
@@ -15,10 +20,10 @@ class VcNotifier(commands.Cog):
     # @Params:
     # NONE
     """
-    @commands.command(name="amisubscribed", description="Tells you if you're subscribed for vc notifs or not.")
+    @app_commands.command(name="amisubscribed", description="Tells you if you're subscribed for vc notifs or not.")
     async def am_i_subscribed(self, interaction: discord.Interaction) -> None:
         # Open session with local db
-        with self.bot.Session() as session:
+        with self.Session() as session:
             try:
                 self.check_user_entry(interaction.user.id)
                 guild = session.get(Guild, interaction.guild.id)
@@ -37,10 +42,10 @@ class VcNotifier(commands.Cog):
     # @Params:
     # NONE
     """
-    @commands.command(name="subscribe", description="Subscribes you to vc notifs.")
+    @app_commands.command(name="subscribe", description="Subscribes you to vc notifs.")
     async def subscribe(self, interaction: discord.Interaction) -> None:
         # Open session with the local db.
-        with self.bot.Session() as session:
+        with self.Session() as session:
             try:
                 arr = []
                 print(arr[5])
@@ -64,9 +69,9 @@ class VcNotifier(commands.Cog):
     # @Params:
     # NONE
     """
-    @commands.command(name="unsubscribe", description="Unsubscribes you from vc notifs.")
+    @app_commands.command(name="unsubscribe", description="Unsubscribes you from vc notifs.")
     async def unsubscribe(self, interaction: discord.Interaction) -> None:
-        with self.bot.Session() as session:
+        with self.Session() as session:
             try:
                 self.check_user_entry(interaction.user.id)
                 usr = session.get(User, interaction.user.id)
@@ -83,7 +88,7 @@ class VcNotifier(commands.Cog):
 
 
     def check_user_entry(self, id) -> bool:
-        with self.bot.Session() as session:
+        with self.Session() as session:
             result = session.query(User) \
                 .filter(User.id == id) \
                 .first()
@@ -122,7 +127,7 @@ class VcNotifier(commands.Cog):
             if totalChatters == 1:
                 print(f"The VC in {guild.name} now active!")
                 # Open session with local db
-                with self.bot.Session() as session:
+                with self.Session() as session:
                     try:
                         # This statement retrieves all user ids of subscribers affiliated with the local guild
                         result = session.query(User.id).join(Guild).filter(Guild.id == guild.id).all()
