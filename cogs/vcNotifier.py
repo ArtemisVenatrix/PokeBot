@@ -1,18 +1,14 @@
 from discord.ext import commands
 from discord import app_commands
 import discord
+
 from models import User, Guild
-import logging
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
+from myBot import MyBot
 
 class VcNotifier(commands.Cog):
 
-    def __init__(self, bot):
-        engine = create_engine("sqlite:///poke_bot.db", echo=True)
-        self.Session = sessionmaker(bind=engine)
-        self.bot = bot
-        self.exceptionLogger = logging.getLogger("discord.exception")
+    def __init__(self, bot: MyBot):
+        self.bot: MyBot = bot
 
 
     """
@@ -23,7 +19,7 @@ class VcNotifier(commands.Cog):
     @app_commands.command(name="amisubscribed", description="Tells you if you're subscribed for vc notifs or not.")
     async def am_i_subscribed(self, interaction: discord.Interaction) -> None:
         # Open session with local db
-        with self.Session() as session:
+        with self.bot.getSession() as session:
             try:
                 self.check_user_entry(interaction.user.id)
                 guild = session.get(Guild, interaction.guild.id)
@@ -33,7 +29,7 @@ class VcNotifier(commands.Cog):
                 else:
                     await interaction.response.send_message("You are not subscribed")
             except Exception as e:
-                print(e)
+                self.bot.logError()
                 await interaction.response.send_message("An error has occurred. Go bug Artemis.")
 
 
@@ -45,7 +41,7 @@ class VcNotifier(commands.Cog):
     @app_commands.command(name="subscribe", description="Subscribes you to vc notifs.")
     async def subscribe(self, interaction: discord.Interaction) -> None:
         # Open session with the local db.
-        with self.Session() as session:
+        with self.bot.getSession() as session:
             try:
                 arr = []
                 print(arr[5])
@@ -60,8 +56,7 @@ class VcNotifier(commands.Cog):
                 else:
                     await interaction.response.send_message("You are already subscribed.")
             except Exception as e:
-                print(e)
-                self.exceptionLogger.exception(e)
+                self.bot.logError(e)
                 await interaction.response.send_message("An error has occurred. Go bug Artemis.")
 
     """
@@ -71,7 +66,7 @@ class VcNotifier(commands.Cog):
     """
     @app_commands.command(name="unsubscribe", description="Unsubscribes you from vc notifs.")
     async def unsubscribe(self, interaction: discord.Interaction) -> None:
-        with self.Session() as session:
+        with self.bot.getSession() as session:
             try:
                 self.check_user_entry(interaction.user.id)
                 usr = session.get(User, interaction.user.id)
@@ -83,12 +78,12 @@ class VcNotifier(commands.Cog):
                 else:
                     await interaction.response.send_message("You aren't subscribed to begin with.")
             except Exception as e:
-                print(e)
+                self.bot.logError(e)
                 await interaction.response.send_message("An error has occurred. Go bug Artemis.")
 
 
     def check_user_entry(self, id) -> bool:
-        with self.Session() as session:
+        with self.bot.getSession() as session:
             result = session.query(User) \
                 .filter(User.id == id) \
                 .first()
@@ -127,7 +122,7 @@ class VcNotifier(commands.Cog):
             if totalChatters == 1:
                 print(f"The VC in {guild.name} now active!")
                 # Open session with local db
-                with self.Session() as session:
+                with self.bot.getSession() as session:
                     try:
                         # This statement retrieves all user ids of subscribers affiliated with the local guild
                         result = session.query(User.id).join(Guild).filter(Guild.id == guild.id).all()
@@ -142,7 +137,7 @@ class VcNotifier(commands.Cog):
                                     await self.bot.create_dm(user)
                                 await user.dm_channel.send(f"The VC in {guild.name} is now active!")
                     except Exception as e:
-                        print(e)
+                        self.bot.logError(e)
 
 async def setup(bot):
     await bot.add_cog(VcNotifier(bot))

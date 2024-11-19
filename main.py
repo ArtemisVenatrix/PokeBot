@@ -22,12 +22,14 @@
 # TODO for v1.3 hotfix:
 #
 #  - DONE: fix subscription commands with new db structure
-#  - TODO: try to recover old db file
+#  - DONE: try to recover old db file
 #
 # TODO for v2 release:
 #
-#  - TODO: setup proper error logging
-#  - TODO: organize features into discord.py's 'cog' extension
+#  - DONE: setup proper error logging
+#  - DONE: organize features into discord.py's 'cog' extension
+#  - TODO: Finnish info logging setup in cogs
+#  - TODO: Make the user tracking update on events and startup rather than when checking a user
 #  - TODO: rebuild models around a dedicated user table
 #
 #  TODO for future releases:
@@ -45,7 +47,6 @@
 import os
 import typing
 import json
-import logging
 import logging.handlers
 import traceback
 
@@ -54,20 +55,21 @@ from discord.ext import commands
 import discord
 from discord import app_commands
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from models import Guild
-from sqlalchemy.orm import sessionmaker
+from myBot import MyBot
 
 
 # Create database engine from the engine factory and instantiate the session factory based on the persistent engine
-engine = create_engine("sqlite:///poke_bot.db", echo=True)
+engine = create_engine("sqlite:///poke_bot.db", echo=False)
 Session = sessionmaker(bind=engine)
 
 # set discords special permission requests, in this case viewing message content, and initialize the bot object
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = MyBot('!', intents, Session)
 logger = logging.getLogger('discord')
 logger.setLevel(logging.DEBUG)
 logging.getLogger('discord.http').setLevel(logging.INFO)
@@ -99,8 +101,7 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 """
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}!")
-    logger.info(f"Logged in as {bot.user}")
+    bot.logInfo(f"Logged in as {bot.user}")
     discordGuilds = []
     # open a session with the database
     with Session() as session:
@@ -123,8 +124,7 @@ async def on_ready():
                 if result is None:
                     discordGuilds.append(guild)
         except Exception as e:
-            logger.error(traceback.format_exception(e))
-            traceback.print_exception(e)
+            bot.logError(e)
     # If the queue of guild entries to be removed has anything in it, send it off to the 'unregister_guild' function.
     if len(guildsToDelete) > 0:
         unregister_guild(guildsToDelete)
@@ -135,14 +135,13 @@ async def on_ready():
 
 @bot.event
 async def setup_hook() -> None:
+    bot.logInfo("Loading Cogs")
     for filename in os.listdir('cogs'):
         if filename.endswith('.py'):
             await bot.load_extension(f'cogs.{filename[:-3]}')
-            print(f"Loaded Cog: {filename[:-3]}")
-            logger.info(f"Loaded Cog: {filename[:-3]}")
+            bot.logInfo(f"Loaded Cog: {filename[:-3]}")
         else:
-            logger.warning(f"Unable to load pycache folder.")
-            print("Unable to load pycache folder.")
+            bot.logWarning("Unable to load pycache folder.")
 
 
 """
@@ -176,19 +175,16 @@ async def on_guild_remove(guild):
 # guilds; Expected Type: [discord.Guild] - list of guilds to remove from local db
 """
 def unregister_guild(guilds: [discord.Guild]):
-    print(f"Unregistering Guilds...")
-    logger.info(f"Unregistering Guilds: {guilds}")
+    bot.logInfo("Unregistering Guilds...")
     with Session() as session:
         try:
             for guild in guilds:
                 session.query(Guild).filter(Guild.id == guild.id).delete()
-                print(f"Removing guild: \"{guild.name}\" from session...")
+                bot.logInfo(f"Removing guild: \"{guild.name}\" from session...")
             session.commit()
-            print("Changes Committed!")
-            logger.info(f"Unregistration Successful!")
+            bot.logInfo("Changes Committed! Unregistration successful.")
         except Exception as e:
-            logger.error(e, e.args)
-            traceback.print_exception(e)
+            bot.logError(e)
 
 
 """
@@ -197,20 +193,18 @@ def unregister_guild(guilds: [discord.Guild]):
 # guilds; Expected Type: [discord.Guild] - list of guilds to register
 """
 def register_guild(guilds: [discord.Guild]):
-    print(f"Registering New Guilds...")
-    logger.info(f"Registering New Guilds: {guilds}")
+    bot.logInfo("Registering New Guilds...")
     # Start a session with the bot side database
     with Session() as session:
         try:
             for guild in guilds:
                 guildObj = Guild(id=guild.id)
                 session.add(guildObj)
-                print(f"Adding guild: \"{guild.name}\" to session...")
+                bot.logInfo(f"Adding guild: \"{guild.name}\" to session...")
             session.commit()
-            print("Guilds committed!")
+            bot.logInfo("Guilds committed! Registration Successful.")
         except Exception as e:
-            logger.error(e, e.args)
-            traceback.print_exception(e)
+            bot.logError(e)
 
 
 """
@@ -237,7 +231,7 @@ async def help(interaction: discord.Interaction, entry: typing.Optional[app_comm
         entryStr = manual[entry]
         await interaction.response.send_message(entryStr)
     except Exception as e:
-        print(e)
+        bot.logError(e)
 
 
 """
@@ -249,12 +243,11 @@ async def help(interaction: discord.Interaction, entry: typing.Optional[app_comm
 @bot.command()
 async def sync(ctx : commands.Context):
     try:
-        print("Syncing...")
+        bot.logInfo("Syncing Commands...")
         synced = await bot.tree.sync()
-        print(synced)
-        print("Syncing complete!")
+        bot.logInfo(f"The following commands were successfully synced: {synced}")
     except Exception as e:
-        print(e)
+        bot.logError(e)
 
 
 """
@@ -292,7 +285,7 @@ async def run_test(ctx: commands.Context, *args):
         else:
             await ctx.channel.send(f"{args[0]} is not a recognized debug command.")
     except Exception as e:
-        print(e)
+        bot.logError(e)
 
 
 """

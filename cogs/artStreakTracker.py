@@ -6,9 +6,10 @@ from discord.ext import commands, tasks
 from discord import app_commands
 import discord
 
-from sqlalchemy import and_, func, create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import and_, func
+
 from models import ArtStreak, ArtStreakSubmission, Guild, PersistentVars
+from myBot import MyBot
 
 
 class ArtStreakTracker(commands.Cog):
@@ -25,10 +26,8 @@ class ArtStreakTracker(commands.Cog):
     ]
 
 
-    def __init__(self, bot):
-        engine = create_engine("sqlite:///poke_bot.db", echo=True)
-        self.Session = sessionmaker(bind=engine)
-        self.bot = bot
+    def __init__(self, bot: MyBot):
+        self.bot: MyBot = bot
 
 
     @commands.Cog.listener()
@@ -49,7 +48,7 @@ class ArtStreakTracker(commands.Cog):
     @tasks.loop(time=streak_reminder_times)
     async def push_reminder(self):
         try:
-            with self.Session() as session:
+            with self.bot.getSession() as session:
                 # Pull a list of all active art streaks from local db
                 result = session.query(ArtStreak).filter(ArtStreak.active).all()
                 # Iterate through list
@@ -74,7 +73,7 @@ class ArtStreakTracker(commands.Cog):
                         await artChannel.send(
                             f"<@{streak.user_id}> still needs to submit art today and is a cringe, gay baby for not doing so already.")
         except Exception as e:
-            print(e)
+            self.bot.logError(e)
 
     """
     # Helper function that handles the job of iterating through all active streaks in the database and checking whether they
@@ -87,7 +86,7 @@ class ArtStreakTracker(commands.Cog):
     async def check_streaks(self, force=False):
         try:
             print("Checking streaks...")
-            with self.Session() as session:
+            with self.bot.getSession() as session:
                 # Pull the persistent vars entry in the db.
                 persistentVars = session.query(PersistentVars).first()
                 # If persistent vars has no entry then make one.
@@ -141,19 +140,19 @@ class ArtStreakTracker(commands.Cog):
                 session.commit()
                 print("Streaks checked successfully!")
         except Exception as e:
-            print(e)
+            self.bot.logError(e)
 
 
     async def terminate_user_streak(self, guild, user):
         try:
-            with (self.Session() as session):
+            with self.bot.getSession() as session:
                 result = session.query(ArtStreak.id)\
                     .join(Guild, ArtStreak.guild_id == guild.id)\
                     .filter(and_(ArtStreak.active, ArtStreak.user_id == user.id))\
                     .first()
                 await self.terminate_streak(result, 0)
         except Exception as e:
-            print(e)
+            self.bot.logError(e)
 
 
     """
@@ -168,7 +167,7 @@ class ArtStreakTracker(commands.Cog):
     async def terminate_streak(self, streak_id: int, reason: int):
         try:
             print(f"Terminating streak: {streak_id}...")
-            with self.Session() as session:
+            with self.bot.getSession() as session:
                 # Pull the requested art streak.
                 artStreak = session.query(ArtStreak).filter(ArtStreak.id == streak_id).first()
                 # Set it to inactive and set its end date.
@@ -191,7 +190,7 @@ class ArtStreakTracker(commands.Cog):
                     f"\nReason: {reasonStr}")
                 print("Streak terminated successfully!")
         except Exception as e:
-            print(e)
+            self.bot.logError(e)
 
 
     """
@@ -211,7 +210,7 @@ class ArtStreakTracker(commands.Cog):
         # check if the attachment is a valid file type (currently only allows audio or image)
         if attachment.content_type.__contains__("image") or attachment.content_type.__contains__("audio"):
             try:
-                with self.Session() as session:
+                with self.bot.getSession() as session:
                     # query all active art streaks linked to the local guild
                     result = session.query(ArtStreak) \
                         .join(Guild, ArtStreak.guild_id == Guild.id) \
@@ -255,7 +254,7 @@ class ArtStreakTracker(commands.Cog):
                     session.add(submissionObj)
                     session.commit()
             except Exception as e:
-                print(e)
+                self.bot.logError(e)
         else:
             # inform the user they have entered an invalid media format
             await interaction.response \
@@ -274,7 +273,7 @@ class ArtStreakTracker(commands.Cog):
     @app_commands.command(name="streakstats", description="View the stats of your current art streak.")
     async def streak_stats(self, interaction: discord.Interaction, user: discord.User):
         try:
-            with self.Session() as session:
+            with self.bot.getSession() as session:
                 # Get list of all the specified user's streaks on the local guild.
                 streaksList = session.query(ArtStreak) \
                     .join(Guild, ArtStreak.guild_id == interaction.guild_id) \
@@ -328,7 +327,7 @@ class ArtStreakTracker(commands.Cog):
                     # Inform the command submitter that the requested user has no streaks on the local guild.
                     await interaction.response.send_message(f"<@{user.id}> has no streaks archived on the local guild.")
         except Exception as e:
-            print(e)
+            self.bot.logError(e)
 
 
     """
@@ -343,7 +342,7 @@ class ArtStreakTracker(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def designate_art_channel(self, ctx: commands.Context):
         try:
-            with self.Session() as session:
+            with self.bot.getSession() as session:
                 # Retrieve db entry for the guild the command was issued on.
                 guildObj = session.query(Guild).filter(Guild.id == ctx.guild.id).first()
                 # Set the guild entry's 'art_channel_id' field to the id of the channel the command was issued from.
@@ -352,7 +351,7 @@ class ArtStreakTracker(commands.Cog):
             # Inform the command submitter that the art channel has been designated.
             await ctx.channel.send("This channel has been designated as the art channel.")
         except Exception as e:
-            print(e)
+            self.bot.logError(e)
 
 
 async def setup(bot):
