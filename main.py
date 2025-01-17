@@ -48,6 +48,7 @@ import io
 import os
 import typing
 import json
+from requests import get
 
 from dotenv import load_dotenv
 from discord.ext import commands, tasks
@@ -564,6 +565,12 @@ async def streak_stats(interaction: discord.Interaction, user: discord.User):
                 await interaction.response.send_message(f"<@{user.id}> has no streaks archived on the local guild.")
     except Exception as e:
         print(e)
+
+
+@bot.tree.command(name="get_ip", description="Pulls the public ip of the host machine which runs all our servers and posts it in chat.")
+async def get_ip(interaction: discord.Interaction):
+    ip = get('https://api.ipify.org').content.decode('utf8')
+    await interaction.response.send_message(f"Here is the server ip: {ip}")
 
 
 """
